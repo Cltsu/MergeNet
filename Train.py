@@ -27,7 +27,7 @@ parser = argparse.ArgumentParser(description="Pytorch implementation of Pointer-
 # parser.add_argument('--train_size', default=100000, type=int, help='Training data size')
 # parser.add_argument('--val_size', default=10000, type=int, help='Validation data size')
 # parser.add_argument('--test_size', default=10000, type=int, help='Test data size')
-parser.add_argument('--batch_size', default=8, type=int, help='Batch size')
+parser.add_argument('--batch_size', default=16, type=int, help='Batch size')
 # Train
 parser.add_argument('--nof_epoch', default=10, type=int, help='Number of epochs')
 parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
@@ -44,13 +44,14 @@ parser.add_argument('--bidir', default=False, action='store_true', help='Bidirec
 
 params = parser.parse_args()
 
+dataset_path = 'G:/merge/dataset/AOSP'
+
 if params.gpu and torch.cuda.is_available():
     USE_CUDA = True
     print('Using GPU, %i devices.' % torch.cuda.device_count())
 else:
     USE_CUDA = False
 
-USE_CUDA = False
 
 model = PointerNet(params.embedding_size,
                    params.hiddens,
@@ -60,7 +61,6 @@ model = PointerNet(params.embedding_size,
 
 # dataset = TSPDataset(params.train_size,
 #                      params.nof_points)
-dataset_path = 'G:/merge/dataset/tmp'
 dataset = load_from_disk(dataset_path).with_format(type='torch')
 
 
@@ -87,6 +87,7 @@ for epoch in range(params.nof_epoch):
     iterator = tqdm(dataloader, unit='Batch')
 
     for i_batch, sample_batched in enumerate(iterator):
+
         iterator.set_description('Batch %i/%i' % (epoch+1, params.nof_epoch))
 
         train_batch = Variable(sample_batched['hidden_state'])
@@ -99,6 +100,14 @@ for epoch in range(params.nof_epoch):
         o, p = model(train_batch)
 
         valid_len_batch = sample_batched['valid_len']
+        mask_tensor = torch.zeros(size=(o.size()))
+        for i in range(o.size()[0]):
+            mask_tensor[i][0:valid_len_batch[i]][:] = 1
+
+        if USE_CUDA:
+            mask_tensor = mask_tensor.cuda()
+
+        o = torch.mul(o, mask_tensor)
 
         o = o.contiguous().view(-1, o.size()[-1])
 
@@ -107,7 +116,7 @@ for epoch in range(params.nof_epoch):
         loss = CCE(o, target_batch)
 
         losses.append(loss.data)
-        batch_loss.append(loss.data)
+        batch_loss.append(loss.data.cpu())
 
         model_optim.zero_grad()
         loss.backward()

@@ -1,3 +1,5 @@
+from ast import literal_eval
+
 from datasets import load_dataset, Dataset
 from torch import nn
 from transformers import RobertaTokenizer, PreTrainedModel, RobertaForSequenceClassification, RobertaModel
@@ -6,13 +8,18 @@ from torch.utils.data import DataLoader
 
 
 def res_indices(conflict):
-    code_lines = conflict['ours'][:] + conflict['theirs'][:]
+    code_lines = []
+    if not conflict['ours'] is None:
+        code_lines = conflict['ours'][:]
+    if not conflict['theirs'] is None:
+        code_lines += conflict['theirs'][:]
     indices = []
-    for line in conflict['resolve']:
-        for i in range(len(code_lines)):
-            if line == code_lines[i]:
-                indices.append(i)
-                break
+    if not conflict['resolve'] is None:
+        for line in conflict['resolve']:
+            for i in range(len(code_lines)):
+                if line == code_lines[i]:
+                    indices.append(i)
+                    break
     return {'label': indices, 'lines': code_lines}
 
 
@@ -25,17 +32,17 @@ def get_max_len(dataset):
 
 
 def padding(example, max_len):
-    pad_lines = example['lines']
-    pad_label = example['label']
     valid_len = len(example['label'])
-    for i in range(max_len - len(example['lines'])):
+    pad_lines = example['lines'] + ['<eos>']
+    pad_label = example['label'] + [valid_len]
+    for i in range(max_len - len(example['lines']) - 1):
         pad_lines = pad_lines + ['<pad>']
-    for i in range(max_len - valid_len):
+    for i in range(max_len - valid_len - 1):
         pad_label = pad_label + [0]
     return {
         'lines': pad_lines,
         'label': pad_label,
-        'valid_len': valid_len
+        'valid_len': valid_len + 1
     }
 
 
@@ -44,42 +51,58 @@ def tokenize_func(example):
 
 
 def embedding_func(example):
-    return {'hidden_state': codeBert(torch.tensor(example['input_ids']), torch.tensor(example['attention_mask']))['pooler_output']}
+    return {'hidden_state': codeBert(torch.tensor(example['input_ids']), torch.tensor(example['attention_mask']))[
+        'pooler_output']}
 
 
-dataset_path = 'G:/merge/dataset/tmp1'
+dataset_path = 'G:/merge/dataset/tmp'
 bertPath = 'G:/merge/model/CodeBERTa-small-v1'
+load_path = "G:/merge/dataset/raw_data/data.json"
+max_len = 30
 
-dataset = load_dataset("json", data_files="G:/study/deeplearning/d2l-pytorch/data/1.json", field="mergeTuples")
+dataset = load_dataset("json", data_files=load_path, field="mergeTuples")
+# dataset = load_dataset('csv', data_files=load_path)
 tokenizer = RobertaTokenizer.from_pretrained("huggingface/CodeBERTa-small-v1")
 codeBert = RobertaModel.from_pretrained(bertPath)
-max_len = 30
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
+print('compute resolution indices')
 label_dataset = dataset.map(res_indices, remove_columns=['ours', 'theirs', 'resolve', 'path', 'base'])
-# max_len = get_max_len(label_dataset['train'])
-filter_dataset = label_dataset.filter(lambda data: len(data['lines']) < max_len and len(data['label']) < max_len)
+print(len(label_dataset['train']))
+
+print('filter large conflicts')
+filter_dataset = label_dataset.filter(lambda data: len(data['lines']) < max_len - 1 and len(data['label']) < max_len - 1) # max_len - 1 因为要给stop token留位置
+print(len(filter_dataset['train']))
+
+print('padding')
 padding_dataset = filter_dataset.map(lambda x: padding(x, max_len))
+print(len(padding_dataset['train']))
+
+print("tokenizing")
 tokenized_dataset = padding_dataset.map(tokenize_func)
+print(len(tokenized_dataset['train']))
 
 for param in codeBert.parameters():
     param.requires_grad_(False)
 
+# dataset_size = 10
+if torch.cuda.is_available():
+    USE_CUDA = True
+else:
+    USE_CUDA = False
 
-dataset_size = 1
-
-ds_cpu = tokenized_dataset['train'].select(range(dataset_size)).map(embedding_func, remove_columns=['lines', 'input_ids', 'attention_mask'])
-ds_cpu = ds_cpu.map(lambda e: {'hidden_state': e['hidden_state'][0]})
-print(len(ds_cpu['hidden_state']))
-print(len(ds_cpu['hidden_state'][0]))
-ds_cpu.save_to_disk(dataset_path)
-
-
-# codeBert.to(device)
-# ds_gpu = tokenized_dataset['train'].with_format("torch", device=device)
-# emb_gpu = ds_gpu.select(range(dataset_size)).map(embedding_func, remove_columns=['lines', 'input_ids', 'attention_mask'])
-# emb_cpu = emb_gpu.with_format("torch", device=torch.device('cpu'))
-# print(emb_cpu)
-# print(emb_cpu[0]['label'].keys())
-# emb_cpu.save_to_disk("G:/study/deeplearning/d2l-pytorch/data")
+print('---------------embedding begin--------------------')
+if USE_CUDA:
+    codeBert.to(device)
+    ds_gpu = tokenized_dataset['train'].with_format("torch", device=device)
+    # emb_gpu = ds_gpu.select(range(dataset_size)).map(embedding_func,
+    #                                                  remove_columns=['lines', 'input_ids', 'attention_mask'])
+    emb_gpu = ds_gpu.map(embedding_func,
+                         remove_columns=['lines', 'input_ids', 'attention_mask'])
+    Dataset.from_dict(emb_gpu.to_dict()).save_to_disk(dataset_path)
+else:
+    ds_cpu = tokenized_dataset['train'].map(embedding_func,
+                                            remove_columns=['lines', 'input_ids',
+                                                            'attention_mask'])
+    ds_cpu = ds_cpu.map(lambda e: {'hidden_state': e['hidden_state'][0]})
+    ds_cpu.save_to_disk(dataset_path)
