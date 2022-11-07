@@ -1,9 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import Parameter
-from transformers import RobertaTokenizer, PreTrainedModel, RobertaForSequenceClassification, RobertaModel
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
 
 
 class Encoder(nn.Module):
@@ -257,18 +255,17 @@ class Decoder(nn.Module):
 
 
 class Embedding(nn.Module):
-    def __init__(self, codeBERT):
+    def __init__(self, codeBERT, batch_size):
         super(Embedding, self).__init__()
         self.bert = codeBERT
-        self.batch = 1
+        self.batch = batch_size
 
     def forward(self, input_ids, attention_mask):
-        # return self.bert(input_ids, attention_mask)['pooler_output']
         ret = self.bert(input_ids[0:self.batch], attention_mask[0:self.batch])['pooler_output']
-        for i in range(len(input_ids) // 4):
+        for i in range(len(input_ids) // self.batch):
             if i == 0:
                 continue
-            cur = self.bert(input_ids[4 * i: 4 * (i + 1)], attention_mask[4 * i: 4 * (i + 1)])['pooler_output']
+            cur = self.bert(input_ids[self.batch * i: self.batch * (i + 1)], attention_mask[self.batch * i: self.batch * (i + 1)])['pooler_output']
             ret = torch.cat([ret, cur], 0)
         return ret
 
@@ -282,7 +279,9 @@ class PointerNet(nn.Module):
                  hidden_dim,
                  lstm_layers,
                  dropout,
-                 bidir=False):
+                 embed_batch,
+                 bert,
+                 bidir=False,):
         """
         Initiate Pointer-Net
 
@@ -297,8 +296,9 @@ class PointerNet(nn.Module):
         self.embedding_dim = embedding_dim
         self.bidir = bidir
         # self.embedding = nn.Linear(2, embedding_dim)
-        self.bert = RobertaModel.from_pretrained('G:/merge/model/CodeBERTa-small-v1')
-        self.embedding = Embedding(self.bert)
+        self.bert = bert
+        self.embed_batch = embed_batch
+        self.embedding = Embedding(self.bert, embed_batch)
         self.encoder = Encoder(embedding_dim,
                                hidden_dim,
                                lstm_layers,
@@ -324,8 +324,6 @@ class PointerNet(nn.Module):
 
         input_ids = inputs[:][0]
         att_mask = inputs[:][1]
-        # inputs = inputs.view(batch_size * input_length, -1)
-        # embedded_inputs = self.embedding(inputs).view(batch_size, input_length, -1)
         input_ids = input_ids.view(-1, input_ids.size()[-1])
         att_mask = att_mask.view(-1, att_mask.size()[-1])
         embedded_inputs = self.embedding(input_ids, att_mask)

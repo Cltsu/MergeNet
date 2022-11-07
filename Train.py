@@ -13,7 +13,7 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 
 from datasets import Dataset, load_from_disk
-
+from transformers import RobertaTokenizer, PreTrainedModel, RobertaForSequenceClassification, RobertaModel
 import numpy as np
 import argparse
 from tqdm import tqdm
@@ -41,10 +41,14 @@ parser.add_argument('--hiddens', type=int, default=1024, help='Number of hidden 
 parser.add_argument('--nof_lstms', type=int, default=2, help='Number of LSTM layers')
 parser.add_argument('--dropout', type=float, default=0., help='Dropout value')
 parser.add_argument('--bidir', default=False, action='store_true', help='Bidirectional')
+parser.add_argument('--embed_batch', type=int, default=1)
+parser.add_argument('--codeBERT', type=str, default='G:/merge/model/CodeBERTa-small-v1', help='path of codeBERT')
+parser.add_argument('--dataset', type=str, default='G:/merge/dataset/noEmbed/train', help='path of dataset')
 
 params = parser.parse_args()
 
-dataset_path = 'G:/merge/dataset/noEmbed/train'
+dataset_path = params.dataset
+codeBERT_path = params.codeBERT
 
 if params.gpu and torch.cuda.is_available():
     USE_CUDA = True
@@ -52,15 +56,17 @@ if params.gpu and torch.cuda.is_available():
 else:
     USE_CUDA = False
 
+embed_model = RobertaModel.from_pretrained(codeBERT_path)
 
 model = PointerNet(params.embedding_size,
                    params.hiddens,
                    params.nof_lstms,
                    params.dropout,
-                   params.bidir)
+                   params.embed_batch,
+                   embed_model,
+                   params.bidir,)
 
-# dataset = TSPDataset(params.train_size,
-#                      params.nof_points)
+
 dataset = load_from_disk(dataset_path).with_format(type='torch')
 
 
