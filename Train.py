@@ -44,7 +44,7 @@ parser.add_argument('--bidir', default=False, action='store_true', help='Bidirec
 
 params = parser.parse_args()
 
-dataset_path = 'G:/merge/dataset/AOSP'
+dataset_path = 'G:/merge/dataset/noEmbed/train'
 
 if params.gpu and torch.cuda.is_available():
     USE_CUDA = True
@@ -90,14 +90,18 @@ for epoch in range(params.nof_epoch):
 
         iterator.set_description('Batch %i/%i' % (epoch+1, params.nof_epoch))
 
-        train_batch = Variable(sample_batched['hidden_state'])
+        # train_batch = Variable(torch.tensor([sample_batched['input_ids'], sample_batched['attention_mask']]))
+        input_batch = Variable(sample_batched['input_ids'])
+        att_batch = Variable(sample_batched['attention_mask'])
         target_batch = Variable(sample_batched['label'])
 
         if USE_CUDA:
-            train_batch = train_batch.cuda()
+            input_batch = input_batch.cuda()
+            att_batch = att_batch.cuda()
+            # train_batch = train_batch.cuda()
             target_batch = target_batch.cuda()
 
-        o, p = model(train_batch)
+        o, p = model([input_batch, att_batch])
 
         valid_len_batch = sample_batched['valid_len']
         mask_tensor = torch.zeros(size=(o.size()))

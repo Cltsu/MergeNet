@@ -55,7 +55,7 @@ def embedding_func(example):
         'pooler_output']}
 
 
-dataset_path = 'G:/merge/dataset/tmp'
+dataset_path = 'G:/merge/dataset/noEmbed'
 bertPath = 'G:/merge/model/CodeBERTa-small-v1'
 load_path = "G:/merge/dataset/raw_data/data.json"
 max_len = 30
@@ -79,30 +79,37 @@ padding_dataset = filter_dataset.map(lambda x: padding(x, max_len))
 print(len(padding_dataset['train']))
 
 print("tokenizing")
-tokenized_dataset = padding_dataset.map(tokenize_func)
+tokenized_dataset = padding_dataset.map(tokenize_func, remove_columns=['lines'])
 print(len(tokenized_dataset['train']))
 
-for param in codeBert.parameters():
-    param.requires_grad_(False)
 
-# dataset_size = 10
-if torch.cuda.is_available():
-    USE_CUDA = True
-else:
-    USE_CUDA = False
+# print(len(tokenized_dataset['train'][0]['input_ids']))
+# print(len(tokenized_dataset['train'][0]['input_ids'][0]))
+# dataloader = DataLoader(tokenized_dataset['train'], batch_size=1)
+# for data in dataloader:
+#     print(data)
+#     for i in data['input_ids']:
+#         print(len(i))
+tokenized_dataset.save_to_disk(dataset_path)
 
-print('---------------embedding begin--------------------')
-if USE_CUDA:
-    codeBert.to(device)
-    ds_gpu = tokenized_dataset['train'].with_format("torch", device=device)
-    # emb_gpu = ds_gpu.select(range(dataset_size)).map(embedding_func,
-    #                                                  remove_columns=['lines', 'input_ids', 'attention_mask'])
-    emb_gpu = ds_gpu.map(embedding_func,
-                         remove_columns=['lines', 'input_ids', 'attention_mask'])
-    Dataset.from_dict(emb_gpu.to_dict()).save_to_disk(dataset_path)
-else:
-    ds_cpu = tokenized_dataset['train'].map(embedding_func,
-                                            remove_columns=['lines', 'input_ids',
-                                                            'attention_mask'])
-    ds_cpu = ds_cpu.map(lambda e: {'hidden_state': e['hidden_state'][0]})
-    ds_cpu.save_to_disk(dataset_path)
+# for param in codeBert.parameters():
+#     param.requires_grad_(False)
+#
+# if torch.cuda.is_available():
+#     USE_CUDA = True
+# else:
+#     USE_CUDA = False
+#
+# print('---------------embedding begin--------------------')
+# if USE_CUDA:
+#     codeBert.to(device)
+#     ds_gpu = tokenized_dataset['train'].with_format("torch", device=device)
+#     emb_gpu = ds_gpu.map(embedding_func,
+#                          remove_columns=['lines', 'input_ids', 'attention_mask'])
+#     Dataset.from_dict(emb_gpu.to_dict()).save_to_disk(dataset_path)
+# else:
+#     ds_cpu = tokenized_dataset['train'].map(embedding_func,
+#                                             remove_columns=['lines', 'input_ids',
+#                                                             'attention_mask'])
+#     ds_cpu = ds_cpu.map(lambda e: {'hidden_state': e['hidden_state'][0]})
+#     ds_cpu.save_to_disk(dataset_path)

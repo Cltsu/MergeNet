@@ -1,7 +1,9 @@
 import torch
 import torch.nn as nn
 from torch.nn import Parameter
+from transformers import RobertaTokenizer, PreTrainedModel, RobertaForSequenceClassification, RobertaModel
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
 
 
 class Encoder(nn.Module):
@@ -25,8 +27,8 @@ class Encoder(nn.Module):
         """
 
         super(Encoder, self).__init__()
-        self.hidden_dim = hidden_dim//2 if bidir else hidden_dim
-        self.n_layers = n_layers*2 if bidir else n_layers
+        self.hidden_dim = hidden_dim // 2 if bidir else hidden_dim
+        self.n_layers = n_layers * 2 if bidir else n_layers
         self.bidir = bidir
         self.lstm = nn.LSTM(embedding_dim,
                             self.hidden_dim,
@@ -239,7 +241,7 @@ class Decoder(nn.Module):
             one_hot_pointers = (runner == indices.unsqueeze(1).expand(-1, outs.size()[1])).float()
 
             # Update mask to ignore seen indices
-            mask  = mask * (1 - one_hot_pointers)
+            mask = mask * (1 - one_hot_pointers)
 
             # Get embedded inputs by max indices
             embedding_mask = one_hot_pointers.unsqueeze(2).expand(-1, -1, self.embedding_dim).byte()
@@ -252,6 +254,23 @@ class Decoder(nn.Module):
         pointers = torch.cat(pointers, 1)
 
         return (outputs, pointers), hidden
+
+
+class Embedding(nn.Module):
+    def __init__(self, codeBERT):
+        super(Embedding, self).__init__()
+        self.bert = codeBERT
+        self.batch = 1
+
+    def forward(self, input_ids, attention_mask):
+        # return self.bert(input_ids, attention_mask)['pooler_output']
+        ret = self.bert(input_ids[0:self.batch], attention_mask[0:self.batch])['pooler_output']
+        for i in range(len(input_ids) // 4):
+            if i == 0:
+                continue
+            cur = self.bert(input_ids[4 * i: 4 * (i + 1)], attention_mask[4 * i: 4 * (i + 1)])['pooler_output']
+            ret = torch.cat([ret, cur], 0)
+        return ret
 
 
 class PointerNet(nn.Module):
@@ -278,6 +297,8 @@ class PointerNet(nn.Module):
         self.embedding_dim = embedding_dim
         self.bidir = bidir
         # self.embedding = nn.Linear(2, embedding_dim)
+        self.bert = RobertaModel.from_pretrained('G:/merge/model/CodeBERTa-small-v1')
+        self.embedding = Embedding(self.bert)
         self.encoder = Encoder(embedding_dim,
                                hidden_dim,
                                lstm_layers,
@@ -297,14 +318,18 @@ class PointerNet(nn.Module):
         :return: Pointers probabilities and indices
         """
 
-        batch_size = inputs.size(0)
-        input_length = inputs.size(1)
+        batch_size = inputs[0].size(0)
 
         decoder_input0 = self.decoder_input0.unsqueeze(0).expand(batch_size, -1)
 
+        input_ids = inputs[:][0]
+        att_mask = inputs[:][1]
         # inputs = inputs.view(batch_size * input_length, -1)
         # embedded_inputs = self.embedding(inputs).view(batch_size, input_length, -1)
-        embedded_inputs = inputs
+        input_ids = input_ids.view(-1, input_ids.size()[-1])
+        att_mask = att_mask.view(-1, att_mask.size()[-1])
+        embedded_inputs = self.embedding(input_ids, att_mask)
+        embedded_inputs = embedded_inputs.view(batch_size, -1, embedded_inputs.size()[-1])
 
         encoder_hidden0 = self.encoder.init_hidden(embedded_inputs)
         encoder_outputs, encoder_hidden = self.encoder(embedded_inputs,
@@ -320,4 +345,4 @@ class PointerNet(nn.Module):
                                                            decoder_hidden0,
                                                            encoder_outputs)
 
-        return  outputs, pointers
+        return outputs, pointers
