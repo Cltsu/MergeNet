@@ -96,7 +96,6 @@ for epoch in range(params.nof_epoch):
 
         iterator.set_description('Batch %i/%i' % (epoch+1, params.nof_epoch))
 
-        # train_batch = Variable(torch.tensor([sample_batched['input_ids'], sample_batched['attention_mask']]))
         input_batch = Variable(sample_batched['input_ids'])
         att_batch = Variable(sample_batched['attention_mask'])
         target_batch = Variable(sample_batched['label'])
@@ -104,26 +103,27 @@ for epoch in range(params.nof_epoch):
         if USE_CUDA:
             input_batch = input_batch.cuda()
             att_batch = att_batch.cuda()
-            # train_batch = train_batch.cuda()
             target_batch = target_batch.cuda()
 
         o, p = model([input_batch, att_batch])
 
         valid_len_batch = sample_batched['valid_len']
-        mask_tensor = torch.zeros(size=(o.size()))
+        mask_tensor = torch.zeros(size=(o.size()[:2]))
         for i in range(o.size()[0]):
-            mask_tensor[i][0:valid_len_batch[i]][:] = 1
+            mask_tensor[i][0:valid_len_batch[i]] = 1
 
         if USE_CUDA:
             mask_tensor = mask_tensor.cuda()
 
-        o = torch.mul(o, mask_tensor)
+        mask_tensor = mask_tensor.view(-1)
 
         o = o.contiguous().view(-1, o.size()[-1])
-
         target_batch = target_batch.view(-1)
 
         loss = CCE(o, target_batch)
+
+        loss = torch.mul(loss, mask_tensor)
+        loss = loss.mean()
 
         losses.append(loss.data)
         batch_loss.append(loss.data.cpu())
