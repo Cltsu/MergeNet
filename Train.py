@@ -42,8 +42,8 @@ parser.add_argument('--nof_lstms', type=int, default=2, help='Number of LSTM lay
 parser.add_argument('--dropout', type=float, default=0., help='Dropout value')
 parser.add_argument('--bidir', default=False, action='store_true', help='Bidirectional')
 parser.add_argument('--embed_batch', type=int, default=1)
-parser.add_argument('--codeBERT', type=str, default='G:/merge/model/CodeBERTa-small-v1', help='path of codeBERT')
-parser.add_argument('--dataset', type=str, default='G:/merge/dataset/noEmbed/train', help='path of dataset')
+parser.add_argument('--codeBERT', type=str, default='codeBERT/CodeBERTa-small-v1', help='path of codeBERT')
+parser.add_argument('--dataset', type=str, default='data', help='path of dataset')
 
 params = parser.parse_args()
 
