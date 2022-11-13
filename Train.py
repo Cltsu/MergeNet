@@ -26,7 +26,7 @@ parser = argparse.ArgumentParser(description="Pytorch implementation of Pointer-
 # parser.add_argument('--train_size', default=100000, type=int, help='Training data size')
 # parser.add_argument('--val_size', default=10000, type=int, help='Validation data size')
 # parser.add_argument('--test_size', default=10000, type=int, help='Test data size')
-parser.add_argument('--batch_size', default=16, type=int, help='Batch size')
+parser.add_argument('--batch_size', default=32, type=int, help='Batch size')
 # Train
 parser.add_argument('--nof_epoch', default=10, type=int, help='Number of epochs')
 parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
@@ -40,7 +40,8 @@ parser.add_argument('--hiddens', type=int, default=1024, help='Number of hidden 
 parser.add_argument('--nof_lstms', type=int, default=2, help='Number of LSTM layers')
 parser.add_argument('--dropout', type=float, default=0., help='Dropout value')
 parser.add_argument('--bidir', default=False, action='store_true', help='Bidirectional')
-parser.add_argument('--embed_batch', type=int, default=1)
+parser.add_argument('--embed_batch', type=int, default=4)
+parser.add_argument('--bert_grad', type=bool, default=False)
 parser.add_argument('--codeBERT', type=str, default='codeBERT/CodeBERTa-small-v1', help='path of codeBERT')
 parser.add_argument('--dataset', type=str, default='data', help='path of dataset')
 
@@ -57,16 +58,21 @@ else:
 
 embed_model = RobertaModel.from_pretrained(codeBERT_path)
 
+if not params.bert_grad:
+    for param in embed_model.parameters():
+        param.requires_grad_(False)
+
 model = PointerNet(params.embedding_size,
                    params.hiddens,
                    params.nof_lstms,
                    params.dropout,
                    params.embed_batch,
                    embed_model,
-                   params.bidir,)
-
+                   params.bidir, )
 
 dataset = load_from_disk(dataset_path).with_format(type='torch')
+# dataset = dataset.select(range(30))
+# dataset.train_test_split(test_size=0.1)
 
 
 dataloader = DataLoader(dataset,
@@ -87,13 +93,25 @@ model_optim = optim.Adam(filter(lambda p: p.requires_grad,
 losses = []
 max_len = 30
 
+
+def max_index(tl):
+    ret = 0
+    max_prob = tl[0]
+    for ii in range(1, len(tl)):
+        if tl[ii] > max_prob:
+            max_prob = tl[ii]
+            ret = ii
+    return ret
+
+
 for epoch in range(params.nof_epoch):
     batch_loss = []
+    batch_acc = 0
     iterator = tqdm(dataloader, unit='Batch')
 
     for i_batch, sample_batched in enumerate(iterator):
 
-        iterator.set_description('Batch %i/%i' % (epoch+1, params.nof_epoch))
+        iterator.set_description('Epoch %i/%i' % (epoch + 1, params.nof_epoch))
 
         input_batch = Variable(sample_batched['input_ids'])
         att_batch = Variable(sample_batched['attention_mask'])
@@ -107,6 +125,16 @@ for epoch in range(params.nof_epoch):
         o, p = model([input_batch, att_batch])
 
         valid_len_batch = sample_batched['valid_len']
+        cur_batch_size = len(valid_len_batch)
+
+        pred = torch.tensor([max_index(probs) for example in o for probs in example], dtype=torch.int64)
+        pred = pred.view(cur_batch_size, max_len)
+        if USE_CUDA:
+            pred = pred.cuda()
+        for i in range(len(valid_len_batch)):
+            if pred[i][0:valid_len_batch[i]].equal(target_batch[i][0:valid_len_batch[i]]):
+                batch_acc += 1
+
         mask_tensor = torch.zeros(size=(o.size()[:2]))
         for i in range(o.size()[0]):
             mask_tensor[i][0:valid_len_batch[i]] = 1
@@ -122,7 +150,7 @@ for epoch in range(params.nof_epoch):
         loss = CCE(o, target_batch)
 
         loss = torch.mul(loss, mask_tensor)
-        loss = loss.mean()
+        loss = loss.sum() / valid_len_batch.sum()
 
         losses.append(loss.data)
         batch_loss.append(loss.data.cpu())
@@ -133,4 +161,5 @@ for epoch in range(params.nof_epoch):
 
         iterator.set_postfix(loss='{}'.format(loss.data))
 
-    iterator.set_postfix(loss=np.average(batch_loss))
+    print('Epoch {0} / {1}, average loss : {2} , average accuracy : {3}'.
+          format(epoch + 1, params.nof_epoch, np.average(batch_loss), batch_acc / len(dataset)))

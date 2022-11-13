@@ -55,9 +55,9 @@ def embedding_func(example):
         'pooler_output']}
 
 
-dataset_path = 'G:/merge/dataset/noEmbed'
+dataset_path = 'G:/merge/dataset/processed'
 bertPath = 'G:/merge/model/CodeBERTa-small-v1'
-load_path = "G:/merge/dataset/raw_data/data.json"
+load_path = "G:/merge/dataset/raw_data/interleaving1.json"
 max_len = 30
 
 dataset = load_dataset("json", data_files=load_path, field="mergeTuples")
