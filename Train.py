@@ -27,21 +27,21 @@ parser = argparse.ArgumentParser(description="Pytorch implementation of Pointer-
 # parser.add_argument('--train_size', default=100000, type=int, help='Training data size')
 # parser.add_argument('--val_size', default=10000, type=int, help='Validation data size')
 # parser.add_argument('--test_size', default=10000, type=int, help='Test data size')
-parser.add_argument('--batch_size', default=2, type=int, help='Batch size')
+parser.add_argument('--batch_size', default=32, type=int, help='Batch size')
 # Train
-parser.add_argument('--nof_epoch', default=1, type=int, help='Number of epochs')
-parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
+parser.add_argument('--nof_epoch', default=100, type=int, help='Number of epochs')
+parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
 # GPU
-parser.add_argument('--gpu', default=True, action='store_true', help='Enable gpu')
+parser.add_argument('--gpu', default=False, action='store_true', help='Enable gpu')
 # TSP
 # parser.add_argument('--nof_points', type=int, default=5, help='Number of points in TSP')
 # Network
 parser.add_argument('--embedding_size', type=int, default=768, help='Embedding size')
 parser.add_argument('--hiddens', type=int, default=1024, help='Number of hidden units')
-parser.add_argument('--nof_lstms', type=int, default=2, help='Number of LSTM layers')
-parser.add_argument('--dropout', type=float, default=0., help='Dropout value')
-parser.add_argument('--bidir', default=False, action='store_true', help='Bidirectional')
-parser.add_argument('--embed_batch', type=int, default=4)
+parser.add_argument('--nof_lstms', type=int, default=4, help='Number of LSTM layers')
+parser.add_argument('--dropout', type=float, default=0.4, help='Dropout value')
+parser.add_argument('--bidir', default=True, action='store_true', help='Bidirectional')
+parser.add_argument('--embed_batch', type=int, default=1)
 parser.add_argument('--bert_grad', type=bool, default=False)
 parser.add_argument('--codeBERT', type=str, default='codeBERT/CodeBERTa-small-v1', help='path of codeBERT')
 parser.add_argument('--dataset', type=str, default='data', help='path of dataset')
@@ -73,7 +73,6 @@ model = PointerNet(params.embedding_size,
                    params.bidir, )
 
 dataset = load_from_disk(dataset_path).with_format(type='torch')
-dataset = dataset.select(range(4))
 # dataset.train_test_split(test_size=0.1)
 dataset = dataset.shuffle(seed=random.randint(0, 100))
 
