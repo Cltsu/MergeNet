@@ -34,12 +34,19 @@ def get_max_len(dataset):
 def padding(example, max_len):
     valid_len = len(example['label'])
     pad_lines = example['lines'] + ['<eos>']
-    pad_label = example['label'] + [valid_len]
+    pad_label = example['label'] + [len(example['lines'])]
     for i in range(max_len - len(example['lines']) - 1):
         pad_lines = pad_lines + ['<pad>']
     for i in range(max_len - valid_len - 1):
         pad_label = pad_label + [0]
+
+    # padding resolve
+    pad_resolve = example['resolve']
+    for i in range(max_len - len(example['resolve'])):
+        pad_resolve = pad_resolve + ['<pad>']
+
     return {
+        'resolve': pad_resolve,
         'lines': pad_lines,
         'label': pad_label,
         'valid_len': valid_len + 1
@@ -55,9 +62,9 @@ def embedding_func(example):
         'pooler_output']}
 
 
-dataset_path = 'G:/merge/dataset/processed'
+dataset_path = 'G:/merge/dataset/processed_mixline_debug'
 bertPath = 'G:/merge/model/CodeBERTa-small-v1'
-load_path = "G:/merge/dataset/raw_data/interleaving1.json"
+load_path = "G:/merge/dataset/raw_data/mixline.json"
 max_len = 30
 
 dataset = load_dataset("json", data_files=load_path, field="mergeTuples")
@@ -67,7 +74,8 @@ codeBert = RobertaModel.from_pretrained(bertPath)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 print('compute resolution indices')
-label_dataset = dataset.map(res_indices, remove_columns=['ours', 'theirs', 'resolve', 'path', 'base'])
+# label_dataset = dataset.map(res_indices, remove_columns=['ours', 'theirs', 'resolve', 'path', 'base'])
+label_dataset = dataset.map(res_indices, remove_columns=['ours', 'theirs', 'path', 'base'])
 print(len(label_dataset['train']))
 
 print('filter large conflicts')
@@ -79,7 +87,8 @@ padding_dataset = filter_dataset.map(lambda x: padding(x, max_len))
 print(len(padding_dataset['train']))
 
 print("tokenizing")
-tokenized_dataset = padding_dataset.map(tokenize_func, remove_columns=['lines'])
+# tokenized_dataset = padding_dataset.map(tokenize_func, remove_columns=['lines'])
+tokenized_dataset = padding_dataset.map(tokenize_func)
 print(len(tokenized_dataset['train']))
 
 

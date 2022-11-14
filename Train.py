@@ -5,6 +5,7 @@ Pytorch implementation of Pointer Network.
 http://arxiv.org/pdf/1506.03134v1.pdf.
 
 """
+import random
 
 import torch
 import torch.optim as optim
@@ -26,7 +27,7 @@ parser = argparse.ArgumentParser(description="Pytorch implementation of Pointer-
 # parser.add_argument('--train_size', default=100000, type=int, help='Training data size')
 # parser.add_argument('--val_size', default=10000, type=int, help='Validation data size')
 # parser.add_argument('--test_size', default=10000, type=int, help='Test data size')
-parser.add_argument('--batch_size', default=32, type=int, help='Batch size')
+parser.add_argument('--batch_size', default=2, type=int, help='Batch size')
 # Train
 parser.add_argument('--nof_epoch', default=10, type=int, help='Number of epochs')
 parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
@@ -73,7 +74,7 @@ model = PointerNet(params.embedding_size,
 dataset = load_from_disk(dataset_path).with_format(type='torch')
 # dataset = dataset.select(range(30))
 # dataset.train_test_split(test_size=0.1)
-
+dataset = dataset.shuffle(seed=random.randint(0, 100))
 
 dataloader = DataLoader(dataset,
                         batch_size=params.batch_size,
@@ -133,6 +134,18 @@ for epoch in range(params.nof_epoch):
             pred = pred.cuda()
         for i in range(len(valid_len_batch)):
             if pred[i][0:valid_len_batch[i]].equal(target_batch[i][0:valid_len_batch[i]]):
+
+                batched_lines = sample_batched['lines']
+                batched_resolve = sample_batched['resolve']
+                for line in [t[i] for t in batched_lines]:
+                    print(line)
+                print('--------------')
+                for line in [t[i] for t in batched_resolve]:
+                    print(line)
+                print('--------------')
+                print(pred[i][0:valid_len_batch[i]])
+                print(target_batch[i][0:valid_len_batch[i]])
+
                 batch_acc += 1
 
         mask_tensor = torch.zeros(size=(o.size()[:2]))
