@@ -135,16 +135,16 @@ for epoch in range(params.nof_epoch):
         for i in range(len(valid_len_batch)):
             if pred[i][0:valid_len_batch[i]].equal(target_batch[i][0:valid_len_batch[i]]):
 
-                batched_lines = sample_batched['lines']
-                batched_resolve = sample_batched['resolve']
-                for line in [t[i] for t in batched_lines]:
-                    print(line)
-                print('--------------')
-                for line in [t[i] for t in batched_resolve]:
-                    print(line)
-                print('--------------')
-                print(pred[i][0:valid_len_batch[i]])
-                print(target_batch[i][0:valid_len_batch[i]])
+                # batched_lines = sample_batched['lines']
+                # batched_resolve = sample_batched['resolve']
+                # for line in [t[i] for t in batched_lines]:
+                #     print(line)
+                # print('--------------')
+                # for line in [t[i] for t in batched_resolve]:
+                #     print(line)
+                # print('--------------')
+                # print(pred[i][0:valid_len_batch[i]])
+                # print(target_batch[i][0:valid_len_batch[i]])
 
                 batch_acc += 1
 
