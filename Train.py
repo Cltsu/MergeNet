@@ -29,7 +29,7 @@ parser = argparse.ArgumentParser(description="Pytorch implementation of Pointer-
 # parser.add_argument('--test_size', default=10000, type=int, help='Test data size')
 parser.add_argument('--batch_size', default=2, type=int, help='Batch size')
 # Train
-parser.add_argument('--nof_epoch', default=10, type=int, help='Number of epochs')
+parser.add_argument('--nof_epoch', default=1, type=int, help='Number of epochs')
 parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
 # GPU
 parser.add_argument('--gpu', default=True, action='store_true', help='Enable gpu')
@@ -45,6 +45,7 @@ parser.add_argument('--embed_batch', type=int, default=4)
 parser.add_argument('--bert_grad', type=bool, default=False)
 parser.add_argument('--codeBERT', type=str, default='codeBERT/CodeBERTa-small-v1', help='path of codeBERT')
 parser.add_argument('--dataset', type=str, default='data', help='path of dataset')
+parser.add_argument('--save_path', type=str, default='/', help='save path of final model')
 
 params = parser.parse_args()
 
@@ -72,7 +73,7 @@ model = PointerNet(params.embedding_size,
                    params.bidir, )
 
 dataset = load_from_disk(dataset_path).with_format(type='torch')
-# dataset = dataset.select(range(30))
+dataset = dataset.select(range(4))
 # dataset.train_test_split(test_size=0.1)
 dataset = dataset.shuffle(seed=random.randint(0, 100))
 
@@ -176,3 +177,5 @@ for epoch in range(params.nof_epoch):
 
     print('Epoch {0} / {1}, average loss : {2} , average accuracy : {3}'.
           format(epoch + 1, params.nof_epoch, np.average(batch_loss), batch_acc / len(dataset)))
+
+torch.save(model.state_dict(), params.save_path)
