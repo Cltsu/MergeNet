@@ -40,7 +40,7 @@ parser.add_argument('--embedding_size', type=int, default=768, help='Embedding s
 parser.add_argument('--hiddens', type=int, default=1024, help='Number of hidden units')
 parser.add_argument('--nof_lstms', type=int, default=4, help='Number of LSTM layers')
 parser.add_argument('--dropout', type=float, default=0.4, help='Dropout value')
-parser.add_argument('--bidir', default=True, action='store_true', help='Bidirectional')
+parser.add_argument('--bidir', default=False, action='store_true', help='Bidirectional')
 parser.add_argument('--embed_batch', type=int, default=1)
 parser.add_argument('--bert_grad', type=bool, default=False)
 parser.add_argument('--codeBERT', type=str, default='codeBERT/CodeBERTa-small-v1', help='path of codeBERT')
