@@ -29,7 +29,7 @@ parser = argparse.ArgumentParser(description="Pytorch implementation of Pointer-
 # parser.add_argument('--test_size', default=10000, type=int, help='Test data size')
 parser.add_argument('--batch_size', default=32, type=int, help='Batch size')
 # Train
-parser.add_argument('--nof_epoch', default=100, type=int, help='Number of epochs')
+parser.add_argument('--nof_epoch', default=10, type=int, help='Number of epochs')
 parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
 # GPU
 parser.add_argument('--gpu', default=False, action='store_true', help='Enable gpu')
@@ -46,6 +46,7 @@ parser.add_argument('--bert_grad', type=bool, default=False)
 parser.add_argument('--codeBERT', type=str, default='codeBERT/CodeBERTa-small-v1', help='path of codeBERT')
 parser.add_argument('--dataset', type=str, default='data', help='path of dataset')
 parser.add_argument('--save_path', type=str, default='/', help='save path of final model')
+parser.add_argument('--editseq', type=bool, default=False)
 
 params = parser.parse_args()
 
@@ -58,7 +59,12 @@ if params.gpu and torch.cuda.is_available():
 else:
     USE_CUDA = False
 
+
+special_tokens_dict = {'additional_special_tokens': ['<sep>', '<eoc>', '<==>', '<=>', '<+=>', '<+>']}
+tokenizer = RobertaTokenizer.from_pretrained("huggingface/CodeBERTa-small-v1")
+tokenizer.add_special_tokens(special_tokens_dict)
 embed_model = RobertaModel.from_pretrained(codeBERT_path)
+embed_model.resize_token_embeddings(len(tokenizer))
 
 if not params.bert_grad:
     for param in embed_model.parameters():
@@ -70,7 +76,8 @@ model = PointerNet(params.embedding_size,
                    params.dropout,
                    params.embed_batch,
                    embed_model,
-                   params.bidir, )
+                   params.bidir,
+                   params.editseq)
 
 dataset = load_from_disk(dataset_path).with_format(type='torch')
 # dataset.train_test_split(test_size=0.1)
@@ -116,14 +123,18 @@ for epoch in range(params.nof_epoch):
 
         input_batch = Variable(sample_batched['input_ids'])
         att_batch = Variable(sample_batched['attention_mask'])
+        editseq_input_batch = Variable(sample_batched['editseq_input_ids'])
+        editseq_att_batch = Variable(sample_batched['editseq_attention_mask'])
         target_batch = Variable(sample_batched['label'])
 
         if USE_CUDA:
             input_batch = input_batch.cuda()
             att_batch = att_batch.cuda()
             target_batch = target_batch.cuda()
+            editseq_input_batch = editseq_input_batch.cuda()
+            editseq_att_batch = editseq_att_batch.cuda()
 
-        o, p = model([input_batch, att_batch])
+        o, p = model([input_batch, att_batch, editseq_input_batch, editseq_att_batch])
 
         valid_len_batch = sample_batched['valid_len']
         cur_batch_size = len(valid_len_batch)
@@ -135,16 +146,16 @@ for epoch in range(params.nof_epoch):
         for i in range(len(valid_len_batch)):
             if pred[i][0:valid_len_batch[i]].equal(target_batch[i][0:valid_len_batch[i]]):
 
-                # batched_lines = sample_batched['lines']
-                # batched_resolve = sample_batched['resolve']
-                # for line in [t[i] for t in batched_lines]:
-                #     print(line)
-                # print('--------------')
-                # for line in [t[i] for t in batched_resolve]:
-                #     print(line)
-                # print('--------------')
-                # print(pred[i][0:valid_len_batch[i]])
-                # print(target_batch[i][0:valid_len_batch[i]])
+                batched_lines = sample_batched['lines']
+                batched_resolve = sample_batched['resolve']
+                for line in [t[i] for t in batched_lines]:
+                    print(line)
+                print('--------------')
+                for line in [t[i] for t in batched_resolve]:
+                    print(line)
+                print('--------------')
+                print(pred[i][0:valid_len_batch[i]])
+                print(target_batch[i][0:valid_len_batch[i]])
 
                 batch_acc += 1
 

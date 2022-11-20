@@ -281,7 +281,8 @@ class PointerNet(nn.Module):
                  dropout,
                  embed_batch,
                  bert,
-                 bidir=False,):
+                 bidir=False,
+                 editseq=False):
         """
         Initiate Pointer-Net
 
@@ -297,6 +298,7 @@ class PointerNet(nn.Module):
         self.bidir = bidir
         # self.embedding = nn.Linear(2, embedding_dim)
         self.bert = bert
+        self.editseq = editseq
         self.embed_batch = embed_batch
         self.embedding = Embedding(self.bert, embed_batch)
         self.encoder = Encoder(embedding_dim,
@@ -324,10 +326,22 @@ class PointerNet(nn.Module):
 
         input_ids = inputs[:][0]
         att_mask = inputs[:][1]
+        editseq_input_ids = inputs[:][2]
+        editseq_att_mask = inputs[:][3]
+
+        # embed codeline
         input_ids = input_ids.view(-1, input_ids.size()[-1])
         att_mask = att_mask.view(-1, att_mask.size()[-1])
         embedded_inputs = self.embedding(input_ids, att_mask)
         embedded_inputs = embedded_inputs.view(batch_size, -1, embedded_inputs.size()[-1])
+
+        if self.editseq:
+            # embed editseq
+            editseq_input_ids = editseq_input_ids.view(-1, editseq_input_ids.size()[-1])
+            editseq_att_mask = editseq_att_mask.view(-1, editseq_att_mask.size()[-1])
+            embedded_editseq = self.embedding(editseq_input_ids, editseq_att_mask)
+            embedded_editseq = embedded_editseq.view(batch_size, -1, embedded_editseq.size()[-1])
+            embedded_inputs = torch.add(embedded_inputs, embedded_editseq)
 
         encoder_hidden0 = self.encoder.init_hidden(embedded_inputs)
         encoder_outputs, encoder_hidden = self.encoder(embedded_inputs,
